@@ -1,1 +1,37 @@
 
+version: 0.2
+
+env:
+  variables:
+    IMAGE_REPO_NAME: mysql
+    AWS_DEFAULT_REGION: ap-south-1
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPO_URI
+
+      # Generate version (auto increment using timestamp or build number)
+      - IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+
+  build:
+    commands:
+      - echo Building Docker image...
+      - docker build -t $IMAGE_REPO_NAME .
+
+      - echo Tagging image...
+      - docker tag $IMAGE_REPO_NAME:latest $REPO_URI:$IMAGE_TAG
+      - docker tag $IMAGE_REPO_NAME:latest $REPO_URI:latest
+
+  post_build:
+    commands:
+      - echo Pushing Docker images...
+      - docker push $REPO_URI:$IMAGE_TAG
+      - docker push $REPO_URI:latest
+
+artifacts:
+  files:
+    - '**/*'
